@@ -289,7 +289,15 @@ test:;
         } else if (key == KEY_RIGHT &&
                    cursor < conwayGrid.maxX * conwayGrid.maxY) {
             cursor++;
-        } else if (key == 'q') {
+        } else if(key == KEY_UP && cursor >= conwayGrid.maxX)
+        {
+            cursor -= conwayGrid.maxX;
+        }
+        else if(key == KEY_DOWN && cursor < (conwayGrid.maxX * conwayGrid.maxY) - conwayGrid.maxX)
+        {
+            cursor += conwayGrid.maxX;
+        }
+        else if (key == 'q') {
             goto back;
         } else if (key == KEY_RESIZE) {
             getmaxyx(stdscr, termMaxY, termMaxX);
