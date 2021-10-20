@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <curses.h>
 #include <malloc.h>
 #include <math.h>
@@ -14,7 +13,7 @@ typedef struct cellGrid {
     bool *grid;
     int   maxY;
     int   maxX;
-
+    int   generation;
 } CellGrid;
 
 typedef struct coord {
@@ -29,19 +28,15 @@ void DrawGrid(CellGrid *outGrid)
     int maxIndex = rows * cols;
 
     clear();
+    wmove(stdscr, 0, 0);
     for (int index = 0; index < maxIndex; index++) {
         bool *cell = &(outGrid->grid[index]);
-        if (index != 0 && index % (cols - 1) == 0) {
-            waddch(stdscr, '\n');
-        }
         if (*cell == true) {
             wattron(stdscr, A_REVERSE);
         }
         waddch(stdscr, ' ');
         wattroff(stdscr, A_REVERSE);
     }
-
-    refresh();
 }
 
 bool *GetCellByCoord(CellGrid *targetGrid, int x, int y)
@@ -62,7 +57,7 @@ Coord GetCellCoord(CellGrid *targetGrid, int offset)
             break;
     }
 
-    return (Coord){(offset % cols), y - 1};
+    return (Coord){(offset % (cols)), y - 1};
 }
 
 int GetDistance(Coord coord1, Coord coord2)
@@ -120,12 +115,13 @@ int CountNeighbors(CellGrid *targetGrid, Coord targetCell)
 
 void NextGeneration(CellGrid *outGrid)
 {
-    int   rows     = outGrid->maxY;
-    int   cols     = outGrid->maxX;
-    int   maxIndex = rows * cols;
+    int        rows       = outGrid->maxY;
+    int        cols       = outGrid->maxX;
+    int        maxIndex   = rows * cols;
+    static int generation = 0;
 
     // allocate new grid
-    bool *newGrid  = malloc(sizeof(bool) * maxIndex);
+    bool *     newGrid    = malloc(sizeof(bool) * maxIndex);
 
     for (int index = 0; index < maxIndex; index++) {
         bool *cell      = &(outGrid->grid[index]);
@@ -159,6 +155,8 @@ void NextGeneration(CellGrid *outGrid)
     // swap new grid
     free(outGrid->grid);
     outGrid->grid = newGrid;
+
+    outGrid->generation++;
 }
 
 void SignalHandler(int sig)
@@ -177,6 +175,17 @@ void GenerateGrid(CellGrid *targetGrid)
         int random              = (rand() % 2);
         targetGrid->grid[index] = random;
     }
+    targetGrid->generation = 0;
+}
+
+void ResizeGrid(CellGrid *targetGrid, int newMaxX, int newMaxY)
+{
+    free(targetGrid->grid);
+    targetGrid->grid = malloc(sizeof(bool) * newMaxY * newMaxX);
+    targetGrid->maxX = newMaxX;
+    targetGrid->maxY = newMaxY;
+
+    GenerateGrid(targetGrid);
 }
 
 int main(int argc, char **argv)
@@ -200,11 +209,16 @@ int main(int argc, char **argv)
     int termMaxY, termMaxX;
     getmaxyx(stdscr, termMaxY, termMaxX);
 
+    // create grid dimensions
+    int      rows = termMaxY - 1;
+    int      cols = termMaxX;
+
     // create grid
     CellGrid conwayGrid;
-    conwayGrid.grid = malloc(sizeof(char) * termMaxY * termMaxX);
-    conwayGrid.maxY = termMaxY;
-    conwayGrid.maxX = termMaxX;
+    conwayGrid.grid       = malloc(sizeof(char) * rows * cols);
+    conwayGrid.maxY       = rows;
+    conwayGrid.maxX       = cols;
+    conwayGrid.generation = 0;
 
     // populate grid
     time_t timeMan;
@@ -213,35 +227,75 @@ int main(int argc, char **argv)
 
     for (;;) {
         DrawGrid(&conwayGrid);
-        usleep(50000);
-        NextGeneration(&conwayGrid);
+        wmove(stdscr, termMaxY - 1, 0);
+        wprintw(stdscr, "generation: %d", conwayGrid.generation);
         refresh();
+
+        usleep(250000);
+        NextGeneration(&conwayGrid);
 
         int keyBuf = getch();
         switch (keyBuf) {
         case 'r':
             srand((unsigned int)time(&timeMan));
-            for (int index = 0; index < (termMaxY * termMaxX); index++) {
+            for (int index = 0; index < (rows * cols); index++) {
                 int random             = (rand() % 2);
                 conwayGrid.grid[index] = random;
             }
+            conwayGrid.generation = 0;
             break;
 
         case KEY_RESIZE:
-            free(conwayGrid.grid);
-
             getmaxyx(stdscr, termMaxY, termMaxX);
-            conwayGrid.grid = malloc(sizeof(bool) * termMaxY * termMaxX);
-            conwayGrid.maxX = termMaxX;
-            conwayGrid.maxY = termMaxY;
-
-            srand((unsigned int)time(&timeMan));
-            GenerateGrid(&conwayGrid);
+            rows = termMaxY - 1;
+            cols = termMaxX;
+            ResizeGrid(&conwayGrid, cols, rows);
             break;
 
         case 'q':
             free(conwayGrid.grid);
             SignalHandler(0);
+            break;
+
+        case 't':
+            goto test;
+        back:
+            timeout(0);
+            break;
+        }
+    }
+test:;
+
+    int cursor = 0;
+    int key;
+    timeout(-1);
+    keypad(stdscr, true);
+    while (1) {
+        DrawGrid(&conwayGrid);
+        Coord test = GetCellCoord(&conwayGrid, cursor);
+        wmove(stdscr, termMaxY - 1, 0);
+        wprintw(stdscr,
+                "index: %d, coord: (%d,%d), alive: %d, neigbors: %d, "
+                "generation: %d",
+                cursor, test.x, test.y, conwayGrid.grid[cursor],
+                CountNeighbors(&conwayGrid, test), conwayGrid.generation);
+        wmove(stdscr, test.y, test.x);
+        waddch(stdscr, 'X');
+        refresh();
+
+        key = getch();
+        if (key == KEY_LEFT && cursor > 0) {
+            cursor--;
+        } else if (key == KEY_RIGHT &&
+                   cursor < conwayGrid.maxX * conwayGrid.maxY) {
+            cursor++;
+        } else if (key == 'q') {
+            goto back;
+        } else if (key == KEY_RESIZE) {
+            getmaxyx(stdscr, termMaxY, termMaxX);
+            rows = termMaxY - 1;
+            cols = termMaxX;
+            ResizeGrid(&conwayGrid, cols, rows);
         }
     }
 
