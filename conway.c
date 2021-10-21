@@ -201,6 +201,16 @@ int main(int argc, char **argv)
     noecho();
     curs_set(0);
     timeout(0);
+    if (has_colors() == FALSE) {
+        endwin();
+        printf("Your terminal does not support color\n");
+        exit(1);
+    }
+    start_color(); /* Start color 			*/
+    init_pair(1, COLOR_GREEN, COLOR_BLACK);
+    init_pair(2, COLOR_WHITE, COLOR_BLACK);
+
+    attron(COLOR_PAIR(1));
 
     // handle signals
     signal(SIGINT, SignalHandler);
@@ -231,7 +241,7 @@ int main(int argc, char **argv)
         wprintw(stdscr, "generation: %d", conwayGrid.generation);
         refresh();
 
-        usleep(250000);
+        usleep(100000);
         NextGeneration(&conwayGrid);
 
         int keyBuf = getch();
@@ -287,7 +297,7 @@ test:;
         if (key == KEY_LEFT && cursor > 0) {
             cursor--;
         } else if (key == KEY_RIGHT &&
-                   cursor < conwayGrid.maxX * conwayGrid.maxY) {
+                   cursor < (conwayGrid.maxX * conwayGrid.maxY) - 1) {
             cursor++;
         } else if (key == KEY_UP && cursor >= conwayGrid.maxX) {
             cursor -= conwayGrid.maxX;
