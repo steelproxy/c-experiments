@@ -34,7 +34,7 @@ void DrawGrid(CellGrid *outGrid)
         if (*cell == true) {
             wattron(stdscr, A_REVERSE);
         }
-        waddch(stdscr, ' ');
+        waddch(stdscr, 254);
         wattroff(stdscr, A_REVERSE);
     }
 }
@@ -291,7 +291,8 @@ test:;
                 CountNeighbors(&conwayGrid, test), conwayGrid.generation);
         wmove(stdscr, test.y, test.x);
         waddch(stdscr, 'X');
-        refresh();
+        wnoutrefresh(stdscr);
+        doupdate();
 
         key = getch();
         if (key == KEY_LEFT && cursor > 0) {
